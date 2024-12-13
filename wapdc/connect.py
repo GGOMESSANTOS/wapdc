@@ -17,11 +17,12 @@ from mysql.connector import Error
 import psycopg2
 from psycopg2 import Error
 import sqlite3
+import logging
 
 
-def connect_datasets(dataset_list):
+def connect_datasets(datasetList):
     # Concatena os datasets em uma única tabela (DataFrame) consolidada
-    return pd.concat(dataset_list, ignore_index=True)
+    return pd.concat(datasetList, ignore_index=True)
 
 class CsvPandasHandler:
     def __init__(self):
@@ -35,96 +36,96 @@ class CsvPandasHandler:
     def concatenate_csv_files(
         self,
         inputDir: str,
-        output_file: str,
-        encoding: str = 'utf-8',
-        sep: str = ',',
-        specific_columns: Optional[List[str]] = None,
-        file_pattern: str = "*.csv"
+        outputFile: str,
+        encodinG: str = 'utf-8',
+        seP: str = ',',
+        specificColumns: Optional[List[str]] = None,
+        filePattern: str = "*.csv"
     ) -> bool:
         """
         Concatena todos os arquivos CSV em um diretório específico.
 
         Args:
-            input_dir (str): Caminho do diretório contendo os arquivos CSV
-            output_file (str): Caminho completo onde o arquivo concatenado será salvo
-            encoding (str, optional): Encoding dos arquivos CSV. Defaults to 'utf-8'.
-            sep (str, optional): Separador usado nos arquivos CSV. Defaults to ','.
-            specific_columns (List[str], optional): Lista específica de colunas para ler. 
+            inputDir (str): Caminho do diretório contendo os arquivos CSV
+            outputFile (str): Caminho completo onde o arquivo concatenado será salvo
+            encodinG (str, optional): Encoding dos arquivos CSV. Defaults to 'utf-8'.
+            seP (str, optional): Separador usado nos arquivos CSV. Defaults to ','.
+            specificColumns (List[str], optional): Lista específica de colunas para ler. 
                                                   Defaults to None (todas as colunas).
-            file_pattern (str, optional): Padrão para filtrar arquivos. Defaults to "*.csv".
+            filePattern (str, optional): Padrão para filtrar arquivos. Defaults to "*.csv".
 
         Returns:
             bool: True se a concatenação for bem-sucedida, False caso contrário.
         """
         try:
             # Converte o caminho de entrada para objeto Path
-            input_path = Path(input_dir)
+            input_path = Path(inputDir)
             
             # Verifica se o diretório existe
             if not input_path.exists():
-                self.logger.error(f"Diretório não encontrado: {input_dir}")
+                self.logger.error(f"Diretório não encontrado: {inputDir}")
                 return False
 
             # Lista todos os arquivos CSV no diretório
-            csv_files = list(input_path.glob(file_pattern))
+            csvFiles = list(input_path.glob(filePattern))
             
-            if not csv_files:
-                self.logger.warning(f"Nenhum arquivo CSV encontrado em: {input_dir}")
+            if not csvFiles:
+                self.logger.warning(f"Nenhum arquivo CSV encontrado em: {inputDir}")
                 return False
 
-            self.logger.info(f"Encontrados {len(csv_files)} arquivos CSV para processar")
+            self.logger.info(f"Encontrados {len(csvFiles)} arquivos CSV para processar")
 
             # Lista para armazenar os DataFrames
-            dfs = []
+            dfS = []
             
             # Processa cada arquivo CSV
-            for file in csv_files:
+            for file in csvFiles:
                 try:
                     self.logger.info(f"Processando arquivo: {file.name}")
                     
                     # Lê o CSV com as configurações especificadas
-                    if specific_columns:
-                        df = pd.read_csv(
+                    if specificColumns:
+                        dF = pd.read_csv(
                             file,
-                            encoding=encoding,
-                            sep=sep,
-                            usecols=specific_columns
+                            encoding=encodinG,
+                            sep=seP,
+                            usecols=specificColumns
                         )
                     else:
-                        df = pd.read_csv(
+                        dF = pd.read_csv(
                             file,
-                            encoding=encoding,
-                            sep=sep
+                            encoding=encodinG,
+                            sep=seP
                         )
                     
                     # Adiciona uma coluna com o nome do arquivo fonte
-                    df['source_file'] = file.name
+                    dF['source_file'] = file.name
                     
-                    dfs.append(df)
+                    dfS.append(dF)
                     
                 except Exception as e:
                     self.logger.error(f"Erro ao processar arquivo {file.name}: {str(e)}")
                     continue
 
-            if not dfs:
+            if not dfS:
                 self.logger.error("Nenhum DataFrame foi criado para concatenação")
                 return False
 
             # Concatena todos os DataFrames
-            final_df = pd.concat(dfs, ignore_index=True)
+            finalDf = pd.concat(dfS, ignore_index=True)
             
             # Cria o diretório de saída se não existir
-            output_path = Path(output_file)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            outputFile = Path(outputFile)
+            outputFile.parent.mkdir(parents=True, exist_ok=True)
             
             # Salva o DataFrame concatenado
-            final_df.to_csv(output_file, index=False, encoding=encoding, sep=sep)
+            finalDf.to_csv(outputFile, index=False, encoding=encodinG, sep=seP)
             
             self.logger.info(f"""
             Concatenação concluída com sucesso!
-            - Total de arquivos processados: {len(dfs)}
-            - Total de linhas no arquivo final: {len(final_df)}
-            - Arquivo salvo em: {output_file}
+            - Total de arquivos processados: {len(dfS)}
+            - Total de linhas no arquivo final: {len(finalDf)}
+            - Arquivo salvo em: {outputFile}
             """)
             
             return True

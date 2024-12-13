@@ -6,8 +6,11 @@ authors = ["GGOMESSANTOS <160145552+GGOMESSANTOS@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
-
+python = "^3.12"# Ou a versão mais recente disponível
+office365-rest-python-client = "^2.3.11" 
+pymongo = "^3.12.0"  # Ou a versão mais recente
+mysql-connector-python = "^8.0.28"  # Ou a versão mais recente
+psycopg2 = { version = "^2.9.1", extras = ["binary"] }  # Opção bina para evitar problemas de compilação
 
 [build-system]
 requires = ["poetry-core"]
