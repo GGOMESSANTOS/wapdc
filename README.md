@@ -1,4 +1,4 @@
-![WAPDC]("https://github.com/GGOMESSANTOS/wapdc/logo.jpg")
+![WAPDC]("logo.jpg")
 
 
 # WAPDC - Write Audit Publish Data Contract
