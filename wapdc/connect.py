@@ -175,64 +175,114 @@ class CsvPandasUnion:
             return {}
 
 
+
 class SharepointConnector:
-    def __init__(self, urL, usernamE, passworD, foldeR):
-        self.url = urL
-        self.username = usernamE
-        self.password = passworD
-        self.folder = foldeR
-        self.ctx = None
+    """
+    Connector for SharePoint sites.
+    
+    This class provides methods to connect to a SharePoint site, list files,
+    download files, and upload files. It uses a data contract to configure
+    the connection details.
+    """
+
+    def __init__(self, dataContractPath):
+        """
+        Initialize the SharepointConnector with a data contract.
+
+        :param dataContractPath: Path to the YAML file containing the data contract
+        """
+        self.dataContract = self._load_data_contract(dataContractPath)
+        self.Ctx = None
+
+    def _load_data_contract(self, path):
+        """
+        Load the data contract from a YAML file.
+
+        :param path: Path to the YAML file
+        :return: Loaded data contract as a dictionary
+        """
+        yaml = YAML(typ='safe')
+        with open(path, 'r') as file:
+            return yaml.load(file)
 
     def connect(self):
+        """
+        Establish a connection to the SharePoint site.
+
+        This method uses the credentials and URL provided in the data contract
+        to authenticate and connect to the SharePoint site.
+        """
         try:
-            self.ctx = ClientContext(self.url).with_credentials(AuthenticationContext(url=self.url, username=self.username, password=self.password))
-            print("Connected to SharePoint site successfully!")
+            authContext = AuthenticationContext(
+                url=self.dataContract['source']['details']['url'],
+                username=self.dataContract['source']['connection']['username'],
+                password=self.dataContract['source']['connection']['password']
+            )
+            self.Ctx = ClientContext(self.dataContract['source']['details']['url']).with_credentials(authContext)
+            print(f"Connected to SharePoint site: {self.dataContract['source']['details']['url']}")
         except Exception as e:
-            print("Error connecting to SharePoint site:", e)
+            print(f"Error connecting to SharePoint site: {e}")
 
     def disconnect(self):
-        if self.ctx:
-            self.ctx.close()
-            print("Disconnected from SharePoint site successfully!")
+        """
+        Disconnect from the SharePoint site.
+
+        This method closes the active connection to the SharePoint site.
+        """
+        if self.Ctx:
+            self.Ctx.close()
+            print(f"Disconnected from SharePoint site: {self.dataContract['source']['details']['url']}")
         else:
             print("No active connection to disconnect.")
 
     def list_files(self):
-        if self.ctx:
-            fileS = File(self.ctx, self.folder).get_files()
+        """
+        List all files in the specified SharePoint folder.
+
+        This method retrieves and prints the names of all files in the
+        folder specified in the data contract.
+        """
+        if self.Ctx:
+            files = File(self.Ctx, self.dataContract['source']['details']['folder']).get_files()
             print("Files in SharePoint site:")
-            for file in fileS:
+            for file in files:
                 print(file.name)
         else:
             print("No active connection to list files.")
 
     def download_file(self, fileName):
-        if self.ctx:
+        """
+        Download a file from the SharePoint site.
+
+        :param fileName: Name of the file to download
+        """
+        if self.Ctx:
             try:
-                filE = File(self.ctx, self.folder + "/" + fileName)
+                file = File(self.Ctx, f"{self.dataContract['source']['details']['folder']}/{fileName}")
                 with open(fileName, 'wb') as f:
-                    filE.download_to_stream(f)
-                print("File downloaded successfully!")
+                    file.download_to_stream(f)
+                print(f"File '{fileName}' downloaded successfully!")
             except Exception as e:
-                print("Error downloading file:", e)
+                print(f"Error downloading file '{fileName}': {e}")
         else:
             print("No active connection to download files.")
 
     def upload_file(self, fileName):
-        if self.ctx:
+        """
+        Upload a file to the SharePoint site.
+
+        :param fileName: Name of the file to upload
+        """
+        if self.Ctx:
             try:
                 with open(fileName, 'rb') as f:
-                    File(self.ctx, self.folder + "/" + fileName).upload_to_stream(f)
-                print("File uploaded successfully!")
+                    File(self.Ctx, f"{self.dataContract['source']['details']['folder']}/{fileName}").upload_to_stream(f)
+                print(f"File '{fileName}' uploaded successfully!")
             except Exception as e:
-                print("Error uploading file:", e)
+                print(f"Error uploading file '{fileName}': {e}")
         else:
             print("No active connection to upload files.")
 
-
-import mysql.connector
-from mysql.connector import Error
-from ruamel.yaml import YAML
 
 class MySqlConnector:
     def __init__(self, dataContractPath):
@@ -319,23 +369,37 @@ class MySqlConnector:
             cursor.close()
 
 
-import psycopg2
-import sqlite3
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
-from ruamel.yaml import YAML
-
 class PostgreSqlConnector:
+    """
+    Connector for PostgreSQL databases.
+    """
+
     def __init__(self, dataContractPath):
+        """
+        Initialize the PostgreSqlConnector with a data contract.
+
+        :param dataContractPath: Path to the YAML file containing the data contract
+        """
         self.dataContract = self._load_data_contract(dataContractPath)
         self.Connection = None
 
     def _load_data_contract(self, path):
+        """
+        Load the data contract from a YAML file.
+
+        :param path: Path to the YAML file
+        :return: Loaded data contract as a dictionary
+        """
         yaml = YAML(typ='safe')
         with open(path, 'r') as file:
             return yaml.load(file)
 
     def connect(self):
+        """
+        Establish a connection to the PostgreSQL database.
+
+        Uses the connection details provided in the data contract.
+        """
         try:
             self.Connection = psycopg2.connect(
                 host=self.dataContract['source']['details']['server'],
@@ -348,17 +412,31 @@ class PostgreSqlConnector:
             print(f"Error connecting to PostgreSQL: {e}")
 
     def disconnect(self):
+        """
+        Disconnect from the PostgreSQL database.
+        """
         if self.Connection:
             self.Connection.close()
             print(f"Disconnected from PostgreSQL database: {self.dataContract['source']['details']['database']}")
 
     def execute_query(self, query):
+        """
+        Execute a SQL query on the PostgreSQL database.
+
+        :param query: SQL query to execute
+        """
         cursor = self.Connection.cursor()
         cursor.execute(query)
         self.Connection.commit()
         cursor.close()
 
     def fetch_results(self, query):
+        """
+        Execute a SQL query and fetch the results.
+
+        :param query: SQL query to execute
+        :return: List of results
+        """
         cursor = self.Connection.cursor()
         cursor.execute(query)
         results = cursor.fetchall()
@@ -367,16 +445,36 @@ class PostgreSqlConnector:
 
 
 class SqliteConnector:
+    """
+    Connector for SQLite databases.
+    """
+
     def __init__(self, dataContractPath):
+        """
+        Initialize the SqliteConnector with a data contract.
+
+        :param dataContractPath: Path to the YAML file containing the data contract
+        """
         self.dataContract = self._load_data_contract(dataContractPath)
         self.Connection = None
 
     def _load_data_contract(self, path):
+        """
+        Load the data contract from a YAML file.
+
+        :param path: Path to the YAML file
+        :return: Loaded data contract as a dictionary
+        """
         yaml = YAML(typ='safe')
         with open(path, 'r') as file:
             return yaml.load(file)
 
     def connect(self):
+        """
+        Establish a connection to the SQLite database.
+
+        Uses the database path provided in the data contract.
+        """
         try:
             self.Connection = sqlite3.connect(self.dataContract['source']['details']['database'])
             print(f"Connected to SQLite database: {self.dataContract['source']['details']['database']}")
@@ -384,17 +482,31 @@ class SqliteConnector:
             print(f"Error connecting to SQLite: {e}")
 
     def disconnect(self):
+        """
+        Disconnect from the SQLite database.
+        """
         if self.Connection:
             self.Connection.close()
             print(f"Disconnected from SQLite database: {self.dataContract['source']['details']['database']}")
 
     def execute_query(self, query):
+        """
+        Execute a SQL query on the SQLite database.
+
+        :param query: SQL query to execute
+        """
         cursor = self.Connection.cursor()
         cursor.execute(query)
         self.Connection.commit()
         cursor.close()
 
     def fetch_results(self, query):
+        """
+        Execute a SQL query and fetch the results.
+
+        :param query: SQL query to execute
+        :return: List of results
+        """
         cursor = self.Connection.cursor()
         cursor.execute(query)
         results = cursor.fetchall()
@@ -403,17 +515,37 @@ class SqliteConnector:
 
 
 class MongoDbConnector:
+    """
+    Connector for MongoDB databases.
+    """
+
     def __init__(self, dataContractPath):
+        """
+        Initialize the MongoDbConnector with a data contract.
+
+        :param dataContractPath: Path to the YAML file containing the data contract
+        """
         self.dataContract = self._load_data_contract(dataContractPath)
         self.Client = None
         self.Db = None
 
     def _load_data_contract(self, path):
+        """
+        Load the data contract from a YAML file.
+
+        :param path: Path to the YAML file
+        :return: Loaded data contract as a dictionary
+        """
         yaml = YAML(typ='safe')
         with open(path, 'r') as file:
             return yaml.load(file)
 
     def connect(self):
+        """
+        Establish a connection to the MongoDB database.
+
+        Uses the connection details provided in the data contract.
+        """
         try:
             self.Client = MongoClient(
                 self.dataContract['source']['details']['server'],
@@ -427,15 +559,31 @@ class MongoDbConnector:
             print(f"Error connecting to MongoDB: {e}")
 
     def disconnect(self):
+        """
+        Disconnect from the MongoDB database.
+        """
         if self.Client:
             self.Client.close()
             print(f"Disconnected from MongoDB: {self.dataContract['source']['details']['database']}")
 
     def insert_document(self, collectionName, document):
+        """
+        Insert a document into a MongoDB collection.
+
+        :param collectionName: Name of the collection to insert into
+        :param document: Document to insert
+        """
         collection = self.Db[collectionName]
         collection.insert_one(document)
 
     def fetch_documents(self, collectionName, query):
+        """
+        Fetch documents from a MongoDB collection based on a query.
+
+        :param collectionName: Name of the collection to query
+        :param query: Query to filter documents
+        :return: List of documents matching the query
+        """
         collection = self.Db[collectionName]
         results = collection.find(query)
         return list(results)

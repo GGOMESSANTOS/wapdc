@@ -1,0 +1,82 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: WAPDC CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]  # Ajustado para a versão especificada no pyproject.toml
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        poetry install
+
+    - name: Lint with flake8
+      run: |
+        poetry run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Test with pytest
+      run: |
+        poetry run pytest
+
+    - name: Check YAML configurations
+      run: |
+        poetry run python -c "from ruamel.yaml import YAML; yaml=YAML(typ='safe'); [yaml.load(open(f)) for f in ['config.yaml', 'data_contract.yaml']]"
+
+    - name: Validate modules
+      run: |
+        poetry run python -c "import connect, collect, consume, correct, control, compose"
+
+    - name: Run data quality checks
+      run: |
+        poetry run python -m correct
+
+    - name: Test pipeline control
+      run: |
+        poetry run python -m control --test
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.12"
+    
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        poetry install
+
+
