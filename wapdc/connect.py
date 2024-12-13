@@ -4,19 +4,19 @@
 # e os integra em uma estrutura comum. Ex: camada landing no S3.
 # ----------------------------------------------------------
 
-imporT pandas as pd
-from typing imporT List, Optional
-from office365.runtime.auth.authentication_context imporT AuthenticationContext
-from office365.sharepoint.client_context imporT ClientContext
-from office365.sharepoint.files.file imporT File
-from pathlib imporT Path
-from pymongo imporT MongoClient
-from pymongo.errors imporT ConnectionFailure
-imporT mysql.connector
-from mysql.connector imporT Error
-imporT psycopg2
-from psycopg2 imporT Error
-imporT sqlite3
+import pandas as pd
+from typing import List, Optional
+from office365.runtime.auth.authentication_context import AuthenticationContext
+from office365.sharepoint.client_context import ClientContext
+from office365.sharepoint.files.file import File
+from pathlib import Path
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+import mysql.connector
+from mysql.connector import Error
+import psycopg2
+from psycopg2 import Error
+import sqlite3
 
 
 def connect_datasets(dataset_list):
@@ -34,7 +34,7 @@ class CsvPandasHandler:
 
     def concatenate_csv_files(
         self,
-        input_dir: str,
+        inputDir: str,
         output_file: str,
         encoding: str = 'utf-8',
         sep: str = ',',
@@ -133,40 +133,40 @@ class CsvPandasHandler:
             self.logger.error(f"Erro durante a concatenação: {str(e)}")
             return False
 
-    def get_csv_info(self, input_dir: str, encoding: str = 'utf-8', sep: str = ',') -> dict:
+    def get_csv_info(self, inputDir: str, encodinG: str = 'utf-8', seP: str = ',') -> dict:
         """
         Obtém informações sobre os arquivos CSV em um diretório.
 
         Args:
-            input_dir (str): Caminho do diretório contendo os arquivos CSV
-            encoding (str, optional): Encoding dos arquivos CSV. Defaults to 'utf-8'.
-            sep (str, optional): Separador usado nos arquivos CSV. Defaults to ','.
+            inputDir (str): Caminho do diretório contendo os arquivos CSV
+            encodinG (str, optional): Encoding dos arquivos CSV. Defaults to 'utf-8'.
+            seP (str, optional): Separador usado nos arquivos CSV. Defaults to ','.
 
         Returns:
             dict: Dicionário com informações sobre os arquivos CSV
         """
         try:
-            input_path = Path(input_dir)
-            csv_files = list(input_path.glob("*.csv"))
+            inputPath = Path(inputDir)
+            csvFiles = list(inputPath.glob("*.csv"))
             
-            info = {
-                "total_files": len(csv_files),
+            infO = {
+                "total_files": len(csvFiles),
                 "files_info": []
             }
             
-            for file in csv_files:
+            for file in csvFiles:
                 try:
-                    df = pd.read_csv(file, encoding=encoding, sep=sep, nrows=1)
-                    file_info = {
+                    dF = pd.read_csv(file, encoding=encodinG, sep=seP, nrows=1)
+                    fileInfo = {
                         "filename": file.name,
-                        "columns": list(df.columns),
+                        "columns": list(dF.columns),
                         "size_mb": round(file.stat().st_size / (1024 * 1024), 2)
                     }
-                    info["files_info"].append(file_info)
+                    infO["files_info"].append(fileInfo)
                 except Exception as e:
                     self.logger.error(f"Erro ao ler arquivo {file.name}: {str(e)}")
             
-            return info
+            return infO
 
         except Exception as e:
             self.logger.error(f"Erro ao obter informações dos arquivos: {str(e)}")
@@ -174,11 +174,11 @@ class CsvPandasHandler:
 
 
 class SharepointConnector:
-    def __init__(self, url, username, password, folder):
-        self.url = url
-        self.username = username
-        self.password = password
-        self.folder = folder
+    def __init__(self, urL, usernamE, passworD, foldeR):
+        self.url = urL
+        self.username = usernamE
+        self.password = passworD
+        self.folder = foldeR
         self.ctx = None
 
     def connect(self):
@@ -197,30 +197,30 @@ class SharepointConnector:
 
     def list_files(self):
         if self.ctx:
-            files = File(self.ctx, self.folder).get_files()
+            fileS = File(self.ctx, self.folder).get_files()
             print("Files in SharePoint site:")
-            for file in files:
+            for file in fileS:
                 print(file.name)
         else:
             print("No active connection to list files.")
 
-    def download_file(self, file_name):
+    def download_file(self, fileName):
         if self.ctx:
             try:
-                file = File(self.ctx, self.folder + "/" + file_name)
-                with open(file_name, 'wb') as f:
-                    file.download_to_stream(f)
+                filE = File(self.ctx, self.folder + "/" + fileName)
+                with open(fileName, 'wb') as f:
+                    filE.download_to_stream(f)
                 print("File downloaded successfully!")
             except Exception as e:
                 print("Error downloading file:", e)
         else:
             print("No active connection to download files.")
 
-    def upload_file(self, file_name):
+    def upload_file(self, fileName):
         if self.ctx:
             try:
-                with open(file_name, 'rb') as f:
-                    File(self.ctx, self.folder + "/" + file_name).upload_to_stream(f)
+                with open(fileName, 'rb') as f:
+                    File(self.ctx, self.folder + "/" + fileName).upload_to_stream(f)
                 print("File uploaded successfully!")
             except Exception as e:
                 print("Error uploading file:", e)
@@ -230,10 +230,10 @@ class SharepointConnector:
 
 
 class MySqlConnector:
-    def __init__(self, hosT, User, Password, databasE):
+    def __init__(self, hosT, useR, passworD, databasE):
         self.hosT = hosT
-        self.User = User
-        self.Password = Password
+        self.User = useR
+        self.Password = passworD
         self.databasE = databasE
         self.Connection = None
 
@@ -241,12 +241,12 @@ class MySqlConnector:
         try:
             self.Connection = mysql.connector.connect(
                 hosT=self.hosT,
-                user=self.User,
-                password=self.Password,
+                useR=self.User,
+                passworD=self.Password,
                 databasE=self.databasE
             )
             if self.Connection.is_connected():
-                print("Connected to MySQL databasE!")
+                print("Connected to MySQL database!")
         except Error as e:
             print(f"Error connecting to MySQL: {e}")
 
@@ -255,25 +255,25 @@ class MySqlConnector:
             self.Connection.close()
             print("Disconnected from MySQL databasE!")
 
-    def execute_query(self, query):
-        cursor = self.Connection.cursor()
-        cursor.execute(query)
+    def execute_query(self, querY):
+        cursoR = self.Connection.cursor()
+        cursoR.execute(querY)
         self.Connection.commit()
-        cursor.close()
+        cursoR.close()
 
-    def fetch_results(self, query):
-        cursor = self.Connection.cursor()
-        cursor.execute(query)
-        results = cursor.fetchall()
-        cursor.close()
-        return results
+    def fetch_results(self, querY):
+        cursoR = self.Connection.cursor()
+        cursoR.execute(querY)
+        resultS = cursoR.fetchall()
+        cursoR.close()
+        return resultS
     
 
 class PostgreSqlConnector:
-    def __init__(self, hosT, User, Password, databasE):
+    def __init__(self, hosT, useR, passworD, databasE):
         self.hosT = hosT
-        self.User = User
-        self.Password = Password
+        self.User = useR
+        self.Password = passworD
         self.databasE = databasE
         self.Connection = None
 
@@ -282,7 +282,7 @@ class PostgreSqlConnector:
             self.Connection = psycopg2.connect(
                 hosT=self.hosT,
                 user=self.User,
-                password=self.Password,
+                passworD=self.Password,
                 databasE=self.databasE
             )
             print("Connected to PostgreSQL databasE!")
@@ -294,18 +294,18 @@ class PostgreSqlConnector:
             self.Connection.close()
             print("Disconnected from PostgreSQL databasE!")
 
-    def execute_query(self, query):
-        cursor = self.Connection.cursor()
-        cursor.execute(query)
+    def execute_query(self, querY):
+        cursoR = self.Connection.cursor()
+        cursoR.execute(querY)
         self.Connection.commit()
-        cursor.close()
+        cursoR.close()
 
-    def fetch_results(self, query):
-        cursor = self.Connection.cursor()
-        cursor.execute(query)
-        results = cursor.fetchall()
-        cursor.close()
-        return results
+    def fetch_results(self, querY):
+        cursoR = self.Connection.cursor()
+        cursoR.execute(querY)
+        resultS = cursoR.fetchall()
+        cursoR.close()
+        return resultS
 
 
 class SqliteConnector:
@@ -325,11 +325,11 @@ class SqliteConnector:
             self.Connection.close()
             print("Disconnected from SQLite database!")
 
-    def execute_query(self, query):
-        cursor = self.Connection.cursor()
-        cursor.execute(query)
+    def execute_query(self, querY):
+        cursoR = self.Connection.cursor()
+        cursoR.execute(querY)
         self.Connection.commit()
-        cursor.close()
+        cursoR.close()
 
     def fetch_results(self, querY):
         cursoR = self.Connection.cursor()
