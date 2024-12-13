@@ -1,4 +1,4 @@
-![WAPDC]("logo.jpg")
+![WAPDC](logo.jpg)
 
 
 # WAPDC - Write Audit Publish Data Contract
