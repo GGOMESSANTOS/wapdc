@@ -1,329 +1,204 @@
-# consume.py
-# A
-# Data: 2020-12-20
-# Descrição: Funções para consumir dados de diferentes fontes. 
-# Democratização dos Dados
-# ----------------------------------------------------------
-
 import os
 import pandas as pd
+import json
 from datetime import datetime
-from typing import List, Optional, Union
-import boto3  # For AWS S3
-from azure.storage.blob import BlobServiceClient  # For Azure Blob Storage
+from typing import Dict, List, Optional, Union
+from pathlib import Path
+import boto3
+from azure.storage.blob import BlobServiceClient
+from delta.tables import DeltaTable
 
-class DataSaver:
-    """
-    Classe abrangente para salvar dados em diferentes formatos e tecnologias.
-    Suporta Pandas, PySpark, Delta, Iceberg, S3 e Azure.
-    """
+class PandasDataSaver:
+
 
     @staticmethod
-    def save_to_database(
-        df: Union[pd.DataFrame, 'spark.DataFrame'], 
-        connection_string: str, 
-        table_name: str, 
-        mode: str = 'replace', 
-        engine: str = 'pandas'
-    ):
-        """
-        Salva DataFrame em banco de dados usando SQLAlchemy ou Spark.
-        
-        Args:
-            df: DataFrame para salvar (Pandas ou Spark)
-            connection_string: String de conexão com o banco
-            table_name: Nome da tabela
-            mode: Modo de gravação (replace/append)
-            engine: Tipo de engine (pandas/spark)
-        """
-        if engine == 'pandas':
-            import sqlalchemy
-            sql_engine = sqlalchemy.create_engine(connection_string)
-            df.to_sql(table_name, sql_engine, if_exists=mode, index=False)
-        elif engine == 'spark':
-            df.write \
-                .format("jdbc") \
-                .option("url", connection_string) \
-                .option("dbtable", table_name) \
-                .mode(mode) \
-                .save()
-        else:
-            raise ValueError("Engine deve ser 'pandas' ou 'spark'")
-        
-    @classmethod        
-    def save_json_file(self, data: Dict, file_path: Path) -> bool:
-        """Salva um arquivo JSON com tratamento de erros.
-
-        Este método recebe um dicionário e o salva no caminho especificado como um arquivo JSON.
-        Se a operação falhar (por exemplo, problemas de permissão ou espaço em disco),
-        uma mensagem de erro será exibida e False será retornado.
-        """
+    def pandas_save_json_file(data: Dict, filePath: Path) -> bool:
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)  # Salva o dicionário como JSON formatado
-            return True  # Retorna True se o arquivo foi salvo com sucesso
+            with open(filePath, 'w', encoding='utf-8') as file:
+                json.dump(data, file, ensure_ascii=False, indent=4)
+            return True
         except Exception as e:
-            print(f"Erro ao salvar o arquivo JSON {file_path}: {str(e)}")
-            return False  # Retorna False em caso de erro
-
-    @classmethod
-    def save_dataframe(
-        df: Union[pd.DataFrame, 'spark.DataFrame'], 
-        file_path: str, 
-        format: str = 'csv', 
-        mode: str = 'w', 
-        engine: str = 'pandas',
-        **kwargs
-    ):
-        """
-        Salva DataFrame em diferentes formatos de arquivo, incluindo JSON e XLSX.
-        
-        Args:
-            df: DataFrame para salvar
-            file_path: Caminho do arquivo
-            format: Formato de salvamento (csv/json/xlsx/parquet/delta/iceberg)
-            mode: Modo de gravação
-            engine: Tipo de engine (pandas/spark)
-        """
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        if engine == 'pandas':
-            if format == 'csv':
-                df.to_csv(file_path, index=False, mode=mode)
-            elif format == 'parquet':
-                df.to_parquet(file_path, index=False)
-            elif format == 'json':
-                df.to_json(file_path, orient='records', lines=True)
-            elif format == 'xlsx':
-                with pd.ExcelWriter(file_path, engine='xlsxwriter') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Sheet1')
-            else:
-                raise ValueError("Formato não suportado para Pandas")
-        
-        elif engine == 'spark':
-            if format == 'csv':
-                df.write.mode(mode).csv(file_path)
-            elif format == 'parquet':
-                df.write.mode(mode).parquet(file_path)
-            elif format == 'delta':
-                df.write \
-                    .format("delta") \
-                    .mode(mode) \
-                    .save(file_path)
-            elif format == 'iceberg':
-                df.writeTo(file_path) \
-                    .using("iceberg") \
-                    .createOrReplace() if mode == 'overwrite' else \
-                    df.writeTo(file_path) \
-                    .using("iceberg") \
-                    .append()
-            else:
-                raise ValueError("Formato não suportado para Spark")
-        else:
-            raise ValueError("Engine deve ser 'pandas' ou 'spark'")
-
-    @classmethod
-    def save_incremental(
-        cls, 
-        df: Union[pd.DataFrame, 'spark.DataFrame'], 
-        base_path: str, 
-        prefix: str = 'data', 
-        format: str = 'csv', 
-        engine: str = 'pandas'
-    ):
-        """
-        Salva dados incrementalmente com timestamp no nome do arquivo.
-        
-        Args:
-            df: DataFrame para salvar
-            base_path: Diretório base para salvamento
-            prefix: Prefixo do nome do arquivo
-            format: Formato de salvamento
-            engine: Tipo de engine
-        """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{prefix}_{timestamp}"
-        full_path = os.path.join(base_path, filename)
-        
-        cls.save_to_file(df, full_path, format=format, engine=engine)
+            print(f"Error saving JSON file {filePath}: {str(e)}")
+            return False
 
     @staticmethod
-    def merge_table(
-        spark: 'SparkSession', 
-        target_table: str, 
-        source_df: 'spark.DataFrame', 
-        merge_condition: str,
-        update_cols: Optional[List[str]] = None,
-        insert_cols: Optional[List[str]] = None,
-        table_type: str = 'delta'
-    ):
-        """
-        Realiza merge em tabelas Delta ou Iceberg.
+    def pandas_save_dataframe_csv(dataFrame: pd.DataFrame, filePath: str, mode: str = 'w', **kwargs):
+        os.makedirs(os.path.dirname(filePath), exist_ok=True)
+        dataFrame.to_csv(filePath, index=False, mode=mode, **kwargs)
+
+    @staticmethod
+    def pandas_save_dataframe_parquet(dataFrame: pd.DataFrame, filePath: str, **kwargs):
+        os.makedirs(os.path.dirname(filePath), exist_ok=True)
+        dataFrame.to_parquet(filePath, index=False, **kwargs)
+
+    @staticmethod
+    def pandas_save_dataframe_json(dataFrame: pd.DataFrame, filePath: str, **kwargs):
+        os.makedirs(os.path.dirname(filePath), exist_ok=True)
+        dataFrame.to_json(filePath, orient='records', lines=True, **kwargs)
+
+    @staticmethod
+    def pandas_save_dataframe_xlsx(dataFrame: pd.DataFrame, filePath: str, **kwargs):
+        os.makedirs(os.path.dirname(filePath), exist_ok=True)
+        with pd.ExcelWriter(filePath, engine='xlsxwriter') as writer:
+            dataFrame.to_excel(writer, index=False, sheet_name='Sheet1', **kwargs)
+
+    @classmethod
+    def pandas_save_incremental(cls, dataFrame: pd.DataFrame, basePath: str, prefix: str = 'data', fileFormat: str = 'csv', **kwargs):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fileName = f"{prefix}_{timestamp}.{fileFormat}"
+        fullPath = os.path.join(basePath, fileName)
         
-        Args:
-            spark: Sessão Spark
-            target_table: Caminho/identificador da tabela de destino
-            source_df: DataFrame fonte para merge
-            merge_condition: Condição de merge
-            update_cols: Colunas para atualizar
-            insert_cols: Colunas para inserir
-            table_type: Tipo de tabela (delta/iceberg)
-        """
-        source_df.createOrReplaceTempView("source_table")
+        saveMethod = getattr(cls, f"pandas_save_dataframe_{fileFormat}")
+        saveMethod(dataFrame, fullPath, **kwargs)
+
+    @staticmethod
+    def pandas_save_to_s3_csv(dataFrame: pd.DataFrame, bucketName: str, fileName: str, credentials: Optional[dict] = None, **kwargs):
+        if credentials:
+            boto3.setup_default_session(**credentials)
+        s3Resource = boto3.resource('s3')
+        csvBuffer = dataFrame.to_csv(index=False, encoding='utf-8', **kwargs)
+        s3Resource.Object(bucketName, fileName).put(Body=csvBuffer)
+
+    @staticmethod
+    def pandas_save_to_s3_json(dataFrame: pd.DataFrame, bucketName: str, fileName: str, credentials: Optional[dict] = None, **kwargs):
+        if credentials:
+            boto3.setup_default_session(**credentials)
+        s3Resource = boto3.resource('s3')
+        jsonBuffer = dataFrame.to_json(orient='records', **kwargs)
+        s3Resource.Object(bucketName, fileName).put(Body=jsonBuffer)
+
+    @staticmethod
+    def pandas_save_to_s3_xlsx(dataFrame: pd.DataFrame, bucketName: str, fileName: str, credentials: Optional[dict] = None, **kwargs):
+        if credentials:
+            boto3.setup_default_session(**credentials)
+        s3Resource = boto3.resource('s3')
+        import io
+        excelBuffer = io.BytesIO()
+        with pd.ExcelWriter(excelBuffer, engine='xlsxwriter') as writer:
+            dataFrame.to_excel(writer, index=False, sheet_name='Sheet1', **kwargs)
+        s3Resource.Object(bucketName, fileName).put(Body=excelBuffer.getvalue())
+
+    @staticmethod
+    def pandas_save_to_azure_blob_csv(dataFrame: pd.DataFrame, containerName: str, blobName: str, connectionString: str, **kwargs):
+        blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
+        blobClient = blobServiceClient.get_blob_client(container=containerName, blob=blobName)
+        csvBuffer = dataFrame.to_csv(index=False, **kwargs)
+        blobClient.upload_blob(csvBuffer, overwrite=True)
+
+    @staticmethod
+    def pandas_save_to_azure_blob_json(dataFrame: pd.DataFrame, containerName: str, blobName: str, connectionString: str, **kwargs):
+        blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
+        blobClient = blobServiceClient.get_blob_client(container=containerName, blob=blobName)
+        jsonBuffer = dataFrame.to_json(orient='records', **kwargs)
+        blobClient.upload_blob(jsonBuffer, overwrite=True)
+
+    @staticmethod
+    def pandas_save_to_azure_blob_xlsx(dataFrame: pd.DataFrame, containerName: str, blobName: str, connectionString: str, **kwargs):
+        blobServiceClient = BlobServiceClient.from_connection_string(connectionString)
+        blobClient = blobServiceClient.get_blob_client(container=containerName, blob=blobName)
+        import io
+        excelBuffer = io.BytesIO()
+        with pd.ExcelWriter(excelBuffer, engine='xlsxwriter') as writer:
+            dataFrame.to_excel(writer, index=False, sheet_name='Sheet1', **kwargs)
+        blobClient.upload_blob(excelBuffer.getvalue(), overwrite=True)
+
+class SparkDataSaver:
+    @staticmethod
+    def spark_save_to_database(dataFrame: 'spark.DataFrame', connectionString: str, tableName: str, mode: str = 'overwrite'):
+        dataFrame.write \
+            .format("jdbc") \
+            .option("url", connectionString) \
+            .option("dbtable", tableName) \
+            .mode(mode) \
+            .save()
+
+    @staticmethod
+    def spark_save_dataframe_csv(dataFrame: 'spark.DataFrame', filePath: str, mode: str = 'overwrite', **kwargs):
+        dataFrame.write.mode(mode).csv(filePath, **kwargs)
+
+    @staticmethod
+    def spark_save_dataframe_parquet(dataFrame: 'spark.DataFrame', filePath: str, mode: str = 'overwrite', **kwargs):
+        dataFrame.write.mode(mode).parquet(filePath, **kwargs)
+
+    @staticmethod
+    def spark_save_dataframe_delta(dataFrame: 'spark.DataFrame', filePath: str, mode: str = 'overwrite', **kwargs):
+        dataFrame.write.format("delta").mode(mode).save(filePath, **kwargs)
+
+    @staticmethod
+    def spark_save_dataframe_iceberg(dataFrame: 'spark.DataFrame', filePath: str, mode: str = 'overwrite', **kwargs):
+        if mode == 'overwrite':
+            dataFrame.writeTo(filePath).using("iceberg").createOrReplace()
+        else:
+            dataFrame.writeTo(filePath).using("iceberg").append()
+
+    @classmethod
+    def spark_save_incremental(cls, dataFrame: 'spark.DataFrame', basePath: str, prefix: str = 'data', fileFormat: str = 'csv', **kwargs):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fileName = f"{prefix}_{timestamp}"
+        fullPath = os.path.join(basePath, fileName)
         
-        if table_type == 'delta':
+        saveMethod = getattr(cls, f"spark_save_dataframe_{fileFormat}")
+        saveMethod(dataFrame, fullPath, **kwargs)
+
+    @staticmethod
+    def spark_merge_table(spark: 'SparkSession', targetTable: str, sourceDataFrame: 'spark.DataFrame', mergeCondition: str,
+                          updateCols: Optional[List[str]] = None, insertCols: Optional[List[str]] = None, tableType: str = 'delta'):
+        sourceDataFrame.createOrReplaceTempView("source_table")
+        
+        if tableType == 'delta':
             from delta.tables import DeltaTable
-            deltaTable = DeltaTable.forPath(spark, target_table)
+            deltaTable = DeltaTable.forPath(spark, targetTable)
             
             mergeOperation = deltaTable.alias("target").merge(
-                source_df.alias("source"), 
-                merge_condition
+                sourceDataFrame.alias("source"), 
+                mergeCondition
             )
             
-            if update_cols:
-                update_dict = {f"target.{col}": f"source.{col}" for col in update_cols}
-                merge_operation = merge_operation.whenMatchedUpdate(set=update_dict)
+            if updateCols:
+                updateDict = {f"target.{col}": f"source.{col}" for col in updateCols}
+                mergeOperation = mergeOperation.whenMatchedUpdate(set=updateDict)
             
-            if insert_cols:
-                insert_dict = {col: f"source.{col}" for col in insert_cols}
-                merge_operation = merge_operation.whenNotMatchedInsert(values=insert_dict)
+            if insertCols:
+                insertDict = {col: f"source.{col}" for col in insertCols}
+                mergeOperation = mergeOperation.whenNotMatchedInsert(values=insertDict)
             
-            merge_operation.execute()
+            mergeOperation.execute()
         
-        elif table_type == 'iceberg':
-            merge_sql = f"""
-            MERGE INTO {target_table} AS target
+        elif tableType == 'iceberg':
+            mergeSql = f"""
+            MERGE INTO {targetTable} AS target
             USING (SELECT * FROM source_table) AS source
-            ON {merge_condition}
+            ON {mergeCondition}
             """
             
-            if update_cols:
-                update_clause = "WHEN MATCHED THEN UPDATE SET " + \
-                    ", ".join([f"target.{col} = source.{col}" for col in update_cols])
-                merge_sql += " " + update_clause
+            if updateCols:
+                updateClause = "WHEN MATCHED THEN UPDATE SET " + \
+                    ", ".join([f"target.{col} = source.{col}" for col in updateCols])
+                mergeSql += " " + updateClause
             
-            if insert_cols:
-                insert_clause = "WHEN NOT MATCHED THEN INSERT " + \
-                    "(" + ", ".join(insert_cols) + ") " + \
-                    "VALUES (" + ", ".join([f"source.{col}" for col in insert_cols]) + ")"
-                merge_sql += " " + insert_clause
+            if insertCols:
+                insertClause = "WHEN NOT MATCHED THEN INSERT " + \
+                    "(" + ", ".join(insertCols) + ") " + \
+                    "VALUES (" + ", ".join([f"source.{col}" for col in insertCols]) + ")"
+                mergeSql += " " + insertClause
             
-            spark.sql(merge_sql)
+            spark.sql(mergeSql)
         
         else:
-            raise ValueError("Tipo de tabela deve ser 'delta' ou 'iceberg'")
+            raise ValueError("Table type must be 'delta' or 'iceberg'")
 
     @staticmethod
-    def vacuum_table(
-        spark: 'SparkSession', 
-        table_path: str, 
-        table_type: str = 'delta', 
-        retention_hours: int = 168
-    ):
-        """
-        Realiza vacuum em tabelas Delta ou limpeza de snapshots em Iceberg.
+    def spark_vacuum_table(spark: 'SparkSession', tablePath: str, tableType: str = 'delta', retentionHours: int = 168):
+        if tableType == 'delta':
+           
+            deltaTable = DeltaTable.forPath(spark, tablePath)
+            deltaTable.vacuum(retentionHours)
         
-        Args:
-            spark: Sessão Spark
-            table_path: Caminho da tabela
-            table_type: Tipo de tabela
-            retention_hours: Horas para retenção
-        """
-        if table_type == 'delta':
-            from delta.tables import DeltaTable
-            delta_table = DeltaTable.forPath(spark, table_path)
-            delta_table.vacuum(retention_hours)
-        
-        elif table_type == 'iceberg':
-            # Para Iceberg, usa SQL para remover snapshots antigos
+        elif tableType == 'iceberg':
             spark.sql(f"""
-                DELETE FROM {table_path}.snapshots 
-                WHERE committed_at < current_timestamp() - INTERVAL {retention_hours} HOURS
+                DELETE FROM {tablePath}.snapshots 
+                WHERE committed_at < current_timestamp() - INTERVAL {retentionHours} HOURS
             """)
         
         else:
-            raise ValueError("Tipo de tabela deve ser 'delta' ou 'iceberg'")
-
-    @classmethod
-    def save_to_s3(
-        cls, 
-        df: pd.DataFrame, 
-        bucket_name: str, 
-        file_name: str, 
-        format: str = 'csv', 
-        credentials: Optional[dict] = None
-    ):
-        """
-        Salva um DataFrame em um bucket S3.
-        
-        Args:
-            df: DataFrame para salvar
-            bucket_name: Nome do bucket S3
-            file_name: Nome do arquivo a ser salvo
-            format: Formato de salvamento (csv/json/xlsx)
-            credentials: Dicionário de credenciais AWS (opcional)
-        """
-        if credentials:
-            boto3.setup_default_session(
-                aws_access_key_id=credentials['aws_access_key_id'],
-                aws_secret_access_key=credentials['aws_secret_access_key'],
-                region_name=credentials.get('region', 'us-west-2')
-            )
-
-        if format == 'csv':
-            csv_buffer = df.to_csv(index=False, encoding='utf-8')
-            s3_resource = boto3.resource('s3')
-            s3_resource.Object(bucket_name, file_name).put(Body=csv_buffer)
-        elif format == 'json':
-            json_buffer = df.to_json(orient='records')
-            s3_resource = boto3.resource('s3')
-            s3_resource.Object(bucket_name, file_name).put(Body=json_buffer)
-        elif format == 'xlsx':
-            import io
-            excel_buffer = io.BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Sheet1')
-            s3_resource = boto3.resource('s3')
-            s3_resource.Object(bucket_name, file_name).put(Body=excel_buffer.getvalue())
-        else:
-            raise ValueError("Formato não suportado para S3")
-
-    @classmethod
-    def save_to_azure_blob(
-        cls, 
-        df: pd.DataFrame, 
-        container_name: str, 
-        blob_name: str, 
-        format: str = 'csv', 
-        connection_string: str = None
-    ):
-        """
-        Salva um DataFrame em um container Azure Blob Storage.
-        
-        Args:
-            df: DataFrame para salvar
-            container_name: Nome do container
-            blob_name: Nome do blob a ser salvo
-            format: Formato de salvamento (csv/json/xlsx)
-            connection_string: String de conexão com Azure Blob Storage
-        """
-        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-
-        if format == 'csv':
-            csv_buffer = df.to_csv(index=False)
-            blob_client.upload_blob(csv_buffer, overwrite=True)
-        elif format == 'json':
-            json_buffer = df.to_json(orient='records')
-            blob_client.upload_blob(json_buffer, overwrite=True)
-        elif format == 'xlsx':
-            import io
-            excel_buffer = io.BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-                df.to_excel(writer, index=False, sheet_name='Sheet1')
-            blob_client.upload_blob(excel_buffer.getvalue(), overwrite=True)
-        else:
-            raise ValueError("Formato não suportado para Azure Blob Storage")
-
-
-
+            raise ValueError("Table type must be 'delta' or 'iceberg'")

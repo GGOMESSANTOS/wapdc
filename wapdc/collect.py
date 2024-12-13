@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Dict, Union
 from deepdiff import DeepDiff
 
-class Collect:
+class PandasCollect:
     def __init__(self, api_base_url: str = None):
         self.api_base_url = api_base_url
 
