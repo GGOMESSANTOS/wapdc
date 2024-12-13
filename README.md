@@ -1,3 +1,6 @@
+![WAPDC](logo.jpg)
+
+
 # WAPDC - Write Audit Publish Data Contract
 
 WAPDC é um framework robusto para construção de fábricas de pipeline de dados, oferecendo uma solução completa para processamento de dados de ponta a ponta, desde a ingestão até o armazenamento e consumo final. O framework é projetado para ser automatizado, escalável e replicável para diferentes fluxos de dados.
