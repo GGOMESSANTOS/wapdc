@@ -18,13 +18,14 @@ import psycopg2
 from psycopg2 import Error
 import sqlite3
 import logging
+from ruamel.yaml import YAML
 
 
 def connect_datasets(datasetList):
     # Concatena os datasets em uma única tabela (DataFrame) consolidada
     return pd.concat(datasetList, ignore_index=True)
 
-class CsvPandasHandler:
+class CsvPandasUnion:
     def __init__(self):
         # Configuração básica de logging
         logging.basicConfig(
@@ -229,144 +230,212 @@ class SharepointConnector:
             print("No active connection to upload files.")
 
 
+import mysql.connector
+from mysql.connector import Error
+from ruamel.yaml import YAML
 
 class MySqlConnector:
-    def __init__(self, hosT, useR, passworD, databasE):
-        self.hosT = hosT
-        self.User = useR
-        self.Password = passworD
-        self.databasE = databasE
-        self.Connection = None
+    def __init__(self, dataContractPath):
+        """
+        Inicializa o conector MySQL com um Data Contract.
+        
+        :param dataContractPath: Caminho para o arquivo YAML do Data Contract
+        """
+        self.dataContract = self.loadDataContract(dataContractPath)
+        self.connection = None
+
+    def loadDataContract(self, path):
+        """
+        Carrega o Data Contract a partir de um arquivo YAML.
+        
+        :param path: Caminho para o arquivo YAML
+        :return: Dicionário contendo o Data Contract
+        """
+        yaml = YAML(typ='safe')
+        with open(path, 'r') as file:
+            return yaml.load(file)
 
     def connect(self):
+        """
+        Estabelece uma conexão com o banco de dados MySQL usando as informações do Data Contract.
+        """
         try:
-            self.Connection = mysql.connector.connect(
-                hosT=self.hosT,
-                useR=self.User,
-                passworD=self.Password,
-                databasE=self.databasE
+            self.connection = mysql.connector.connect(
+                host=self.dataContract['source']['details']['server'],
+                user=self.dataContract['source']['connection']['username'],
+                password=self.dataContract['source']['connection']['password'],
+                database=self.dataContract['source']['details']['database']
             )
-            if self.Connection.is_connected():
-                print("Connected to MySQL database!")
+            if self.connection.is_connected():
+                print(f"Connected to MySQL database: {self.dataContract['source']['details']['database']}")
         except Error as e:
             print(f"Error connecting to MySQL: {e}")
 
     def disconnect(self):
-        if self.Connection.is_connected():
-            self.Connection.close()
-            print("Disconnected from MySQL databasE!")
+        """
+        Encerra a conexão com o banco de dados MySQL.
+        """
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+            print(f"Disconnected from MySQL database: {self.dataContract['source']['details']['database']}")
 
-    def execute_query(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
-        self.Connection.commit()
-        cursoR.close()
+    def executeQuery(self, query):
+        """
+        Executa uma query SQL no banco de dados.
+        
+        :param query: String contendo a query SQL a ser executada
+        """
+        if not self.connection or not self.connection.is_connected():
+            raise ConnectionError("Not connected to the database")
+        
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(query)
+            self.connection.commit()
+        except Error as e:
+            print(f"Error executing query: {e}")
+        finally:
+            cursor.close()
 
-    def fetch_results(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
-        resultS = cursoR.fetchall()
-        cursoR.close()
-        return resultS
-    
+    def fetchResults(self, query):
+        """
+        Executa uma query SQL e retorna os resultados.
+        
+        :param query: String contendo a query SQL a ser executada
+        :return: Lista de dicionários, onde cada dicionário representa uma linha do resultado
+        """
+        if not self.connection or not self.connection.is_connected():
+            raise ConnectionError("Not connected to the database")
+        
+        cursor = self.connection.cursor(dictionary=True)
+        try:
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return results
+        except Error as e:
+            print(f"Error fetching results: {e}")
+            return None
+        finally:
+            cursor.close()
+
+
+import psycopg2
+import sqlite3
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
+from ruamel.yaml import YAML
 
 class PostgreSqlConnector:
-    def __init__(self, hosT, useR, passworD, databasE):
-        self.hosT = hosT
-        self.User = useR
-        self.Password = passworD
-        self.databasE = databasE
+    def __init__(self, dataContractPath):
+        self.dataContract = self._load_data_contract(dataContractPath)
         self.Connection = None
+
+    def _load_data_contract(self, path):
+        yaml = YAML(typ='safe')
+        with open(path, 'r') as file:
+            return yaml.load(file)
 
     def connect(self):
         try:
             self.Connection = psycopg2.connect(
-                hosT=self.hosT,
-                user=self.User,
-                passworD=self.Password,
-                databasE=self.databasE
+                host=self.dataContract['source']['details']['server'],
+                user=self.dataContract['source']['connection']['username'],
+                password=self.dataContract['source']['connection']['password'],
+                database=self.dataContract['source']['details']['database']
             )
-            print("Connected to PostgreSQL databasE!")
-        except Error as e:
+            print(f"Connected to PostgreSQL database: {self.dataContract['source']['details']['database']}")
+        except Exception as e:
             print(f"Error connecting to PostgreSQL: {e}")
 
     def disconnect(self):
         if self.Connection:
             self.Connection.close()
-            print("Disconnected from PostgreSQL databasE!")
+            print(f"Disconnected from PostgreSQL database: {self.dataContract['source']['details']['database']}")
 
-    def execute_query(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
+    def execute_query(self, query):
+        cursor = self.Connection.cursor()
+        cursor.execute(query)
         self.Connection.commit()
-        cursoR.close()
+        cursor.close()
 
-    def fetch_results(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
-        resultS = cursoR.fetchall()
-        cursoR.close()
-        return resultS
+    def fetch_results(self, query):
+        cursor = self.Connection.cursor()
+        cursor.execute(query)
+        results = cursor.fetchall()
+        cursor.close()
+        return results
 
 
 class SqliteConnector:
-    def __init__(self, databasE):
-        self.Database = databasE
+    def __init__(self, dataContractPath):
+        self.dataContract = self._load_data_contract(dataContractPath)
         self.Connection = None
+
+    def _load_data_contract(self, path):
+        yaml = YAML(typ='safe')
+        with open(path, 'r') as file:
+            return yaml.load(file)
 
     def connect(self):
         try:
-            self.Connection = sqlite3.connect(self.databasE)
-            print("Connected to SQLite database!")
-        except Error as e:
+            self.Connection = sqlite3.connect(self.dataContract['source']['details']['database'])
+            print(f"Connected to SQLite database: {self.dataContract['source']['details']['database']}")
+        except Exception as e:
             print(f"Error connecting to SQLite: {e}")
 
     def disconnect(self):
         if self.Connection:
             self.Connection.close()
-            print("Disconnected from SQLite database!")
+            print(f"Disconnected from SQLite database: {self.dataContract['source']['details']['database']}")
 
-    def execute_query(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
+    def execute_query(self, query):
+        cursor = self.Connection.cursor()
+        cursor.execute(query)
         self.Connection.commit()
-        cursoR.close()
+        cursor.close()
 
-    def fetch_results(self, querY):
-        cursoR = self.Connection.cursor()
-        cursoR.execute(querY)
-        resultS = cursoR.fetchall()
-        cursoR.close()
-        return resultS
+    def fetch_results(self, query):
+        cursor = self.Connection.cursor()
+        cursor.execute(query)
+        results = cursor.fetchall()
+        cursor.close()
+        return results
+
 
 class MongoDbConnector:
-    def __init__(self, hosT, porT, databasE):
-        self.hosT = hosT
-        self.porT = porT
-        self.databasE = databasE
+    def __init__(self, dataContractPath):
+        self.dataContract = self._load_data_contract(dataContractPath)
         self.Client = None
         self.Db = None
 
+    def _load_data_contract(self, path):
+        yaml = YAML(typ='safe')
+        with open(path, 'r') as file:
+            return yaml.load(file)
+
     def connect(self):
         try:
-            self.Client = MongoClient(self.hosT, self.porT)
-            self.Db = self.Client[self.databasE]
+            self.Client = MongoClient(
+                self.dataContract['source']['details']['server'],
+                self.dataContract['source']['details']['port']
+            )
+            self.Db = self.Client[self.dataContract['source']['details']['database']]
             # Check connection
             self.Client.admin.command('ping')
-            print("Connected to MongoDB!")
+            print(f"Connected to MongoDB: {self.dataContract['source']['details']['database']}")
         except ConnectionFailure as e:
             print(f"Error connecting to MongoDB: {e}")
 
     def disconnect(self):
         if self.Client:
             self.Client.close()
-            print("Disconnected from MongoDB!")
+            print(f"Disconnected from MongoDB: {self.dataContract['source']['details']['database']}")
 
-    def insert_document(self, collectionName, documenT):
-        collectioN = self.Db[collectionName]
-        collectioN.insert_one(documenT)
+    def insert_document(self, collectionName, document):
+        collection = self.Db[collectionName]
+        collection.insert_one(document)
 
-    def fetch_documents(self, collectionName, querY):
-        collectioN = self.Db[collectionName]
-        resultS = collectioN.find(querY)
-        return list(resultS)
+    def fetch_documents(self, collectionName, query):
+        collection = self.Db[collectionName]
+        results = collection.find(query)
+        return list(results)
